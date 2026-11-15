@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<title>野球スコアボード</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:16px 10px;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;background:#f7f8fa;color:#111}
+h1{text-align:center;font-size:21px;margin:5px 0 16px}
+.wrap{max-width:900px;margin:auto;background:white;padding:12px;border-radius:14px;box-shadow:0 2px 12px #00000012}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.names input{width:100%;min-width:0;padding:10px 8px;border:1px solid #bbb;border-radius:8px;font-size:16px;text-align:center}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;table-layout:fixed;min-width:340px}
+th,td{border:1px solid #333;text-align:center;height:48px;padding:3px;font-size:14px}
+th{background:#f0f2f5;font-weight:700}
+th.team,td.team{width:74px;font-weight:700}
+th.total,td.total{width:42px}
+td.score{font-size:19px;font-weight:600;cursor:pointer;touch-action:manipulation;background:#fff}
+td.score:active{background:#e7f1ff}
+td.score.empty{color:#bbb}
+td.total{font-weight:800;font-size:18px}
+.actions{display:flex;justify-content:center;margin-top:14px}
+button{font:inherit;border:0;border-radius:9px;padding:11px 16px;background:#e8ebef;color:#111}
+.reset{background:#fce8e8;color:#a11}
+.hint{text-align:center;color:#666;font-size:12px;margin:10px 0 0}
+.overlay{display:none;position:fixed;inset:0;background:#0008;z-index:5;align-items:center;justify-content:center;padding:18px}
+.overlay.show{display:flex}
+.dialog{width:min(340px,100%);background:white;border-radius:16px;padding:17px;box-shadow:0 8px 30px #0004}
+.dialog h2{font-size:18px;text-align:center;margin:0 0 14px}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.keys button{font-size:22px;font-weight:700;padding:14px 8px;background:#f0f2f5}
+.keys button.x{background:#fff0f0;color:#b00020}
+.keys button.clear{font-size:15px;background:#e8f0ff}
+.keys button.done{font-size:16px;background:#1769d2;color:white}
+</style>
+</head>
+<body>
+<h1>⚾ 野球スコアボード</h1>
+<main class="wrap">
+ <div class="names">
+  <input id="team0" maxlength="7" aria-label="先攻チーム名" placeholder="先攻チーム">
+  <input id="team1" maxlength="7" aria-label="後攻チーム名" placeholder="後攻チーム">
+ </div>
+ <div class="tablewrap">
+  <table id="board" aria-label="スコアボード">
+   <thead><tr><th class="team">チーム</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th class="total">計</th></tr></thead>
+   <tbody>
+    <tr><td class="team" id="label0">先攻</td><td class="score empty" data-r="0" data-i="0"></td><td class="score empty" data-r="0" data-i="1"></td><td class="score empty" data-r="0" data-i="2"></td><td class="score empty" data-r="0" data-i="3"></td><td class="score empty" data-r="0" data-i="4"></td><td class="score empty" data-r="0" data-i="5"></td><td class="score empty" data-r="0" data-i="6"></td><td class="score empty" data-r="0" data-i="7"></td><td class="score empty" data-r="0" data-i="8"></td><td class="total" id="total0"></td></tr>
+    <tr><td class="team" id="label1">後攻</td><td class="score empty" data-r="1" data-i="0"></td><td class="score empty" data-r="1" data-i="1"></td><td class="score empty" data-r="1" data-i="2"></td><td class="score empty" data-r="1" data-i="3"></td><td class="score empty" data-r="1" data-i="4"></td><td class="score empty" data-r="1" data-i="5"></td><td class="score empty" data-r="1" data-i="6"></td><td class="score empty" data-r="1" data-i="7"></td><td class="score empty" data-r="1" data-i="8"></td><td class="total" id="total1"></td></tr>
+   </tbody>
+  </table>
+ </div>
+ <div class="actions"><button class="reset" id="reset">リセット</button></div>
+ <p class="hint">点数のマスをタップして入力（×は攻撃なし）</p>
+</main>
+<div class="overlay" id="overlay">
+ <div class="dialog">
+  <h2 id="dialogTitle">得点を入力</h2>
+  <div class="keys">
+   <button data-value="1">1</button><button data-value="2">2</button><button data-value="3">3</button>
+   <button data-value="4">4</button><button data-value="5">5</button><button data-value="6">6</button>
+   <button data-value="7">7</button><button data-value="8">8</button><button data-value="9">9</button>
+   <button data-value="0">0</button><button class="x" data-value="×">×</button><button class="clear" data-value="">空欄</button>
+   <button class="done" id="done" style="grid-column:1/-1">決定</button>
+  </div>
+ </div>
+</div>
+<script>
+(()=>{
+ const scores=[Array(9).fill(""),Array(9).fill("")];
+ let active=null, pending="";
+ const $=id=>document.getElementById(id);
+ const overlay=$("overlay");
+ function save(){try{localStorage.setItem("baseball-scoreboard-v1",JSON.stringify({scores,names:[$("team0").value,$("team1").value]}));}catch(e){}}
+ function render(){
+  document.querySelectorAll("td.score").forEach(cell=>{
+   const r=+cell.dataset.r,i=+cell.dataset.i,v=scores[r][i];
+   cell.textContent=v;cell.classList.toggle("empty",v==="");
+  });
+  for(let r=0;r<2;r++){
+   $("label"+r).textContent=$("team"+r).value.trim()|| (r===0?"先攻":"後攻");
+   const sum=scores[r].reduce((a,v)=>a+(v!==""&&v!=="×"?Number(v):0),0);
+   $("total"+r).textContent=scores[r].every(v=>v==="")?"":sum;
+  }
+  save();
+ }
+ try{
+  const saved=JSON.parse(localStorage.getItem("baseball-scoreboard-v1")||"null");
+  if(saved){
+   if(Array.isArray(saved.scores)&&saved.scores.length===2) for(let r=0;r<2;r++) if(Array.isArray(saved.scores[r])) scores[r]=Array.from({length:9},(_,i)=>saved.scores[r][i]??"");
+   if(Array.isArray(saved.names)) for(let r=0;r<2;r++) $("team"+r).value=saved.names[r]||"";
+  }
+ }catch(e){}
+ $("team0").addEventListener("input",render);$("team1").addEventListener("input",render);
+ document.querySelectorAll("td.score").forEach(cell=>cell.addEventListener("click",()=>{
+  active=[+cell.dataset.r,+cell.dataset.i];pending=scores[active[0]][active[1]];
+  $("dialogTitle").textContent=($("label"+active[0]).textContent||"チーム")+"・"+(active[1]+1)+"回";
+  overlay.classList.add("show");
+ }));
+ document.querySelectorAll("[data-value]").forEach(btn=>btn.addEventListener("click",()=>{
+  pending=btn.dataset.value;
+  document.querySelectorAll("[data-value]").forEach(b=>b.style.outline="");
+  btn.style.outline="3px solid #1769d2";
+ }));
+ $("done").addEventListener("click",()=>{
+  if(active){scores[active[0]][active[1]]=pending;render();}
+  active=null;overlay.classList.remove("show");
+  document.querySelectorAll("[data-value]").forEach(b=>b.style.outline="");
+ });
+ overlay.addEventListener("click",e=>{if(e.target===overlay){overlay.classList.remove("show");active=null;}});
+ $("reset").addEventListener("click",()=>{
+  if(!confirm("スコアをすべて消去しますか？"))return;
+  for(let r=0;r<2;r++) scores[r].fill("");
+  $("team0").value="";$("team1").value="";render();
+ });
+ render();
+})();
+</script>
+</body>
+</html>
